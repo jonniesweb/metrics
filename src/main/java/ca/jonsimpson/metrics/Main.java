@@ -22,6 +22,16 @@ import com.readytalk.metrics.StatsDReporter;
 
 public class Main {
 	
+	private final class RandomGauge implements Gauge<Integer> {
+		@Override
+		public Integer getValue() {
+			System.out.println("got new value");
+			return new Random().nextInt(100);
+		}
+	}
+
+
+
 	private static final String HOST_NAME = "host";
 	private static final String APP_NAME = "app";
 
@@ -39,27 +49,24 @@ public class Main {
 				.build("localhost", 8125)
 				.start(5, TimeUnit.SECONDS);
 		
-		registry.register(MetricRegistry.name("requests"),
-				new Gauge<Integer>() {
-					@Override
-					public Integer getValue() {
-						System.out.println("got new value");
-						return new Random().nextInt(100);
-					}
-				});
+		// configure reporting metrics to the console
+		ConsoleReporter.forRegistry(registry)
+				.convertRatesTo(TimeUnit.SECONDS)
+				.convertDurationsTo(TimeUnit.MILLISECONDS)
+				.build()
+				.start(5, TimeUnit.SECONDS);
+
+		// register a random gauge
+		registry.register(MetricRegistry.name("requests"), new RandomGauge());
 		
-		final ConsoleReporter reporter = ConsoleReporter.forRegistry(registry)
-                .convertRatesTo(TimeUnit.SECONDS)
-                .convertDurationsTo(TimeUnit.MILLISECONDS)
-                .build();
-		reporter.start(5, TimeUnit.SECONDS);
-		
+		// register JVM metrics
 		registerAll("jvm.gc", new GarbageCollectorMetricSet(), registry);
 		registerAll("jvm.memory", new MemoryUsageGaugeSet(), registry);
 		registerAll("jvm.threads", new ThreadStatesGaugeSet(), registry);
 		registerAll("jvm.classes", new ClassLoadingGaugeSet(), registry);
 		registry.register("jvm.fd", new FileDescriptorRatioGauge());
 		
+		// register health checks
 		HealthCheckRegistry healthChecks = new HealthCheckRegistry();
 		healthChecks.register("database", healthCheck());
 		
